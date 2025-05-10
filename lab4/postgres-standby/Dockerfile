@@ -11,24 +11,40 @@ RUN apt-get update && \
     apt-get install -y \
     postgresql \
     postgresql-contrib \
-    openssh-client \
+    postgresql-client \
+    openssh-server \
     vim \
+    nano \
     sudo \
+    net-tools \
+    iputils-ping \
+    telnet \
+    curl \
     && rm -rf /var/lib/apt/lists/*
-
-# Копируем скрипт (но не запускаем автоматически)
-COPY init.sh /init.sh
-RUN chmod +x /init.sh
 
 # Устанавливаем переменные среды
 ENV PGDATA=/var/lib/postgresql/data
 ENV PGVERSION=14
-ENV PGPASSWORD=replicator123
 
 # Разрешаем доступ к PostgreSQL
 RUN echo "postgres ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
-# Открываем порт
-EXPOSE 5433
+# Создаем пользователя ubuntu
+RUN useradd -m -s /bin/bash ubuntu && \
+    echo "ubuntu ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers && \
+    echo "ubuntu:ubuntu" | chpasswd
 
+# Настраиваем SSH для репликации
+RUN mkdir /var/run/sshd && \
+    sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
+    sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+
+# Создаем директорию для PostgreSQL run
+RUN mkdir -p /var/run/postgresql && \
+    chown postgres:postgres /var/run/postgresql
+
+# Открываем порты
+EXPOSE 5433 22
+
+# Держим контейнер запущенным
 CMD ["tail", "-f", "/dev/null"]

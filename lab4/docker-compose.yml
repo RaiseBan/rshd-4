@@ -8,7 +8,6 @@ services:
     ports:
       - "5433:5433"
     volumes:
-      - ./postgres-master/init.sh:/init.sh
       - postgres-master-data:/var/lib/postgresql/data
     networks:
       postgres-network:
@@ -21,32 +20,20 @@ services:
     ports:
       - "5434:5433"
     volumes:
-      - ./postgres-standby/init.sh:/init.sh
       - postgres-standby-data:/var/lib/postgresql/data
     networks:
       postgres-network:
         ipv4_address: 172.20.0.11
 
-  pgpool:
-    build: ./pgpool
-    container_name: pgpool
-    hostname: pgpool
+  pgpool-client:
+    build: ./pgpool-client
+    container_name: pgpool-client
+    hostname: pgpool-client
     ports:
-      - "5432:5432"
-    volumes:
-      - ./pgpool/init.sh:/init.sh
+      - "5432:5432" # для pgpool
     networks:
       postgres-network:
         ipv4_address: 172.20.0.12
-
-  client:
-    image: ubuntu:22.04
-    container_name: client
-    hostname: client
-    command: tail -f /dev/null
-    networks:
-      postgres-network:
-        ipv4_address: 172.20.0.13
 
 networks:
   postgres-network:
