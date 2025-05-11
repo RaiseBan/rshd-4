@@ -1,7 +1,16 @@
-docker exec -it -u postgres postgres-master bash
-echo 'export PATH=/usr/lib/postgresql/14/bin:$PATH' >> ~/.bashrc
+docker exec -it -u root postgres-master bash
 
-cd ~
+echo 'export PATH=/usr/lib/postgresql/14/bin:$PATH' >> ~/.bashrc
+export PATH=/usr/lib/postgresql/14/bin:$PATH
+
+
+dd if=/dev/zero of=/var/lib/postgresql/pgdisk.fs bs=1024 count=100000
+mkfs.ext3 /var/lib/postgresql/pgdisk.fs
+mkdir -p /var/lib/postgresql/limited
+mount -t ext3 -o loop /var/lib/postgresql/pgdisk.fs /var/lib/postgresql/limited
+chown postgres:postgres /var/lib/postgresql/limited
+
+cd /var/lib/postgresql/limited
 mkdir database
 
 initdb -D database
@@ -47,7 +56,7 @@ mkdir -p ~/.ssh
 chmod 700 ~/.ssh
 
 cat > ~/.ssh/authorized_keys << EOF
-ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDAvDpZtVu8UZ3a+6QntVCBo4M3huUz3/bamPCxJ9NUAMkk8GiQ0WbdN9CUrORvZpR9wmzSAcQzIGYlsRf8sQLc7dOtrrZuAnTDhu9f3eE3WLh/NdXpz9oOQQj3KxncEfdew1eV7Z9B0HWcKA6qUB4piq3dhi0DdmeTl+z95DMAYXA6LDgRz+cbeNGeZd774H2JMHBrFPgblrMnGm2AnxtFMDujc6AnU20JtUtAvVO3kspoatOYDBB4Uu04QfuvPXJAtPhYlxZKAqBGsJ5JUQUqh85W+cmY/u0ViF5AaCRhv7s5klzbqAyIT1ygUD+a6/fhkVznk7us2CJHEe2isYzuq5JNwjHVyHqzUmFSlAvKVddGnDVANzIoquH3AWMNta88EIlQ0DBs280F2EJbYmoNv9Pi4SkKrGlT63LqBMEUuhw73hJj/1VhEOgnKbN/z7qA8zPAcFeKNz3BIlfuXtyan9IgStU/6iTyC/uIpGQTipP7EC1pIPMKxRGCtxIvPmycOVW6Pg6oEFABLxFgCEq53ylCQmlfi6rJb62yWeSwG93Ds7lmB/oqhcShmPwONINEtj5lR6/S+7IIAe+0nya3OdcyEvKDToDSzt8WKwcRqJpg7CVMIRSfHSduv9/41BvXwnJ2wDDvohQJwZWztyxELihNJxOupx/o+kWdByeV7w== postgres@postgres-master
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC/8NSXih57D9lkrqlZCCOHcMe9PLYI4jrMC1BplsYTv0QkGpmj52lTcUoc/+zDYfSS2swKkfSoMGF11Mu3c3x1joVVD0TbAI6Vpxf2a30IYLtM7haFMT1/aLoMEvYrXVqzHuHmRj2XRdNoG3dccIaFKqPa73oZfz2M80v8TvM849wcNeiZCGOaPuZYn3xAAmIY2Gmr00UfOhD8DtzWVr7bQqCFgDs6ZYYIlN/siRuSYe+rjNunlStjMhIFmfVkEiBDYGD+sED1e28ObLocNfLBXy1eTOU+FYUEmcLzfCVPS4XWMsiO/W0veP30TROs+KGtmXVZ5Gwp+FFeVexBhJ71g8JE3vrolW3t7UJs6kspT8oQglEhMGF/+lXSQW2+SDglXcSaahJekg3gYGMZ7EZ7e0XCLTDvTLkuSvNEoJ1PFRaay6FWL/GIDCoRDBquGC3lHtxGE2TbfzYDVPyolGMJkXSpqroOSTagCY3Xtf5G1ZqURQeNVrY98t1KWnzeDcfJT5zZmzP2TmK4vJ/EEue+dRyiYH4VDUTdhjFWJxjSgitcFm4HGpuHxRMEdAA6Ne06HhuaXMB2OCtBEVBJlLa19oqZfCywGW4Anbo1rJkEas5r2/52FMOUjUmV1swBTv5LSI15DPiBUyFnYe5nqbgn6H/Of8GLwwqVUCtNt4gOuw== postgres@postgres-master
 EOF
 chmod 600 ~/.ssh/authorized_keys
 
@@ -83,7 +92,7 @@ port = 5432
 backend_hostname0 = '172.20.0.10'
 backend_port0 = 5433
 backend_weight0 = 1
-backend_data_directory0 = '/var/lib/postgresql/database'
+backend_data_directory0 = '/var/lib/postgresql/limited_space/database'
 backend_flag0 = 'ALLOW_TO_FAILOVER'
 
 backend_hostname1 = '172.20.0.11'
@@ -114,7 +123,7 @@ port = 5432
 backend_hostname0 = '172.20.0.10'
 backend_port0 = 5433
 backend_weight0 = 1
-backend_data_directory0 = '/var/lib/postgresql/database'
+backend_data_directory0 = '/var/lib/postgresql/limited_space/database'
 backend_flag0 = 'ALLOW_TO_FAILOVER'
 
 backend_hostname1 = '172.20.0.11'
@@ -174,4 +183,11 @@ INSERT INTO test_replication (data) VALUES ('Test data 1'), ('Test data 2');
 docker exec -u postgres postgres-master psql -p 5433 -c "SELECT * FROM test_replication;"
 
 docker exec -u postgres postgres-standby psql -p 5433 -c "SELECT * FROM test_replication;"
+
+# ВАЖНО если не работает подключение с локалки, то скорее всего у вас занят порт 5432, или изменить порт на другой при запуске контейнера или убить процесс postgresql
+
+#powershell
+Get-NetTCPConnection -LocalPort 5432 -ErrorAction SilentlyContinue
+Get-Process -Id 7204,14564 | Select-Object Id, ProcessName, Path
+
 

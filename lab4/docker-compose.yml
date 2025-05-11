@@ -5,6 +5,7 @@ services:
     build: ./postgres-master
     container_name: postgres-master
     hostname: postgres-master
+    privileged: true
     ports:
       - "5433:5433"
     volumes:
